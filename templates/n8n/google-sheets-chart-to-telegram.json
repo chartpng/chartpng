@@ -1,0 +1,226 @@
+{
+  "name": "ChartPNG: Google Sheets chart to Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "**ChartPNG: Google Sheets chart to Telegram**\n\nSheet setup: a tab called Data with the headers label and value.\n\n1. Pick your Google Sheets credential, your spreadsheet and the Data tab in \"Read rows\".\n2. In \"Send photo to Telegram\", pick your Telegram credential and set the Chat ID.\n3. Run the workflow once, then publish it (Active on n8n 1.x).\n\nTelegram gets the chart as a URL in the Photo field, so no file is uploaded and no binary data is passed. The \"Check the render\" node opens the URL once, so a bad sheet stops the run before a broken link is sent.\n\nOptional: enable \"Post to Slack\" and pick your Slack credential to send the same URL as a Slack image block. A Slack image URL can be at most 3000 characters; over that, the Slack node stops with a message and Telegram is not affected.\n\nThis URL is unsigned, so the image keeps the small watermark. A signed URL (see Docs, Signed URLs) removes it: https://chartpng.dev/docs#signed-urls\n\nDocs: https://chartpng.dev/guides/google-sheets-chart-to-telegram",
+        "height": 500,
+        "width": 520
+      },
+      "id": "note-setup",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "tg-trigger",
+      "name": "Every Monday",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Data",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "tg-read",
+      "name": "Read rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// One bar chart from the sheet: the \"label\" column names a bar, \"value\" sets its height.\n// Change TITLE to what the chart is about.\nconst TITLE = 'Support tickets per week';\nconst rows = $input.all().map((item) => item.json);\nif (!rows.length) throw new Error('The sheet needs a label column and a numeric value column.');\n// Number('') and Number(null) are 0, so an empty cell has to be caught before Number().\nconst bad = (v) => v == null || String(v).trim() === '' || Number.isNaN(Number(v));\nconst badRow = rows.findIndex((row) => bad(row.value));\nif (badRow !== -1) {\n  throw new Error('Row ' + (badRow + 1) + ' of the Data tab (label \"' + rows[badRow].label + '\") has no number in the value column. The sheet needs a label column and a numeric value column.');\n}\nconst labels = rows.map((row) => String(row.label));\nconst values = rows.map((row) => Number(row.value));\nconst chart = {\n  type: 'bar',\n  data: { labels, datasets: [{ label: TITLE, data: values }] },\n  options: { plugins: { legend: { display: false }, title: { display: true, text: TITLE }, chartpng: { source: 'Source: Google Sheets' } } },\n};\nconst imageUrl = 'https://chartpng.dev/chart?w=800&h=450&dpr=2&c=' + encodeURIComponent(JSON.stringify(chart));\nconst caption = TITLE + ': ' + values.at(-1) + ' in ' + labels.at(-1);\n// Slack refuses an image block whose URL is longer than 3000 characters. Telegram has no such limit and does not read\n// blocks or slackError; the Post to Slack node stops with slackError, so Slack never gets a broken message.\nconst blocks = [{ type: 'image', image_url: imageUrl, alt_text: caption }];\nconst slackError = imageUrl.length > 3000\n  ? 'The chart URL is ' + imageUrl.length + ' characters and Slack takes at most 3000 in an image block. Use fewer rows or shorter labels. Telegram is not affected.'\n  : '';\nreturn [{ json: { imageUrl, caption, blocks, slackError } }];"
+      },
+      "id": "tg-build",
+      "name": "Build chart URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.imageUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "tg-check",
+      "name": "Check the render",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendPhoto",
+        "chatId": "REPLACE_WITH_CHAT_ID",
+        "binaryData": false,
+        "file": "={{ $('Build chart URL').first().json.imageUrl }}",
+        "additionalFields": {
+          "caption": "={{ $('Build chart URL').first().json.caption }}"
+        }
+      },
+      "id": "tg-send",
+      "name": "Send photo to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        220
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_CHANNEL_ID",
+          "mode": "id"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ (() => { const j = $('Build chart URL').first().json; if (j.slackError) throw new Error(j.slackError); return JSON.stringify({ blocks: j.blocks }); })() }}",
+        "text": "={{ $('Build chart URL').first().json.caption }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "tg-slack",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        400
+      ],
+      "disabled": true,
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Monday": {
+      "main": [
+        [
+          {
+            "node": "Read rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read rows": {
+      "main": [
+        [
+          {
+            "node": "Build chart URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build chart URL": {
+      "main": [
+        [
+          {
+            "node": "Check the render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check the render": {
+      "main": [
+        [
+          {
+            "node": "Send photo to Telegram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

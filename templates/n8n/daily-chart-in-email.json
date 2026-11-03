@@ -1,0 +1,110 @@
+{
+  "name": "ChartPNG: daily chart in an email",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "**ChartPNG: daily chart in an email**\n\n1. Open \"Build chart\" and replace the sample numbers with your data.\n2. In \"Send email\", pick your SMTP credential and set From and To.\n3. Run the workflow once, then publish it (Active on n8n 1.x).\n\nThe email links the chart as an image URL, so Gmail and Outlook show it in the body. A URL cannot carry a Pro key: this one keeps the small watermark.\n\nDocs: https://chartpng.dev/guides/n8n",
+        "height": 340,
+        "width": 420
+      },
+      "id": "note-setup",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Every day at 8",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Sample data: replace it with your own (a database, an API, another node).\nconst hours = ['00', '04', '08', '12', '16', '20'];\nconst orders = [3, 1, 8, 21, 17, 9];\nconst chart = {\n  type: 'line',\n  data: { labels: hours, datasets: [{ label: 'Orders', data: orders }] },\n  options: { plugins: { title: { display: true, text: 'Orders yesterday, by hour' } } },\n};\nconst imageUrl = 'https://chartpng.dev/chart?w=800&h=450&c=' + encodeURIComponent(JSON.stringify(chart));\nconst total = orders.reduce((sum, n) => sum + n, 0);\nconst alt = 'Line chart of orders yesterday by hour. Total: ' + total + '.';\nreturn [{ json: { chart, imageUrl, alt } }];"
+      },
+      "id": "daily-build",
+      "name": "Build chart",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "reports@example.com",
+        "toEmail": "team@example.com",
+        "subject": "Daily orders",
+        "emailFormat": "html",
+        "html": "=<p>Orders yesterday, by hour.</p>\n<img src=\"{{ $json.imageUrl }}\" alt=\"{{ $json.alt }}\" width=\"600\" style=\"max-width:100%;height:auto\">",
+        "options": {}
+      },
+      "id": "daily-email",
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        240
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every day at 8": {
+      "main": [
+        [
+          {
+            "node": "Build chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build chart": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

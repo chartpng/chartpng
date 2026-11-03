@@ -1,0 +1,35 @@
+{
+  "name": "@chartpng/mcp",
+  "version": "0.2.0",
+  "mcpName": "dev.chartpng/chartpng",
+  "description": "MCP server that lets AI agents draw Chart.js charts as PNG images (ChartPNG).",
+  "type": "module",
+  "bin": {
+    "chartpng-mcp": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "chart",
+    "chart.js",
+    "png",
+    "ai-agent"
+  ],
+  "homepage": "https://chartpng.dev",
+  "bugs": {
+    "email": "hola@chartpng.dev"
+  },
+  "author": "ChartPNG <hola@chartpng.dev> (https://chartpng.dev)",
+  "license": "MIT",
+  "dependencies": {
+    "@chartpng/client": "workspace:^"
+  }
+}

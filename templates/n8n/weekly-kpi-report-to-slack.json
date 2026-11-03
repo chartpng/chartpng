@@ -1,0 +1,142 @@
+{
+  "name": "ChartPNG: weekly KPI report to Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "**ChartPNG: weekly KPI report to Slack**\n\n1. Open \"Sample data\" and replace the numbers with your own (a database, an API, another node). Keep the field names, or change \"Build chart URLs\" to match.\n2. In \"Post to Slack\", pick your Slack credential and set the channel.\n3. Run the workflow once, then publish it (Active on n8n 1.x).\n\nThe message holds two images: a KPI with a sparkline (preset kpi) and this week against last week (preset comparison). Slack loads each image from its URL, and an image URL can be at most 3000 characters, so keep the data short.\n\nThe URLs carry no key, so the images have a small watermark. Docs: https://chartpng.dev/guides/n8n",
+        "height": 340,
+        "width": 440
+      },
+      "id": "note-setup",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "kpi-trigger",
+      "name": "Every Monday",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Sample data: replace it with your own (a database, an API, another node).\nconst weeks = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'];\nconst mrr = [8200, 8650, 8400, 8900, 9100, 9350, 9100, 9840];\nconst days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];\nconst thisWeek = [42, 55, 38, 61, 70, 33, 29];\nconst lastWeek = [36, 48, 41, 52, 58, 35, 24];\nreturn [{ json: { weeks, mrr, days, thisWeek, lastWeek } }];"
+      },
+      "id": "kpi-data",
+      "name": "Sample data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const { weeks, mrr, days, thisWeek, lastWeek } = $input.first().json;\n\nconst kpi = {\n  type: 'line',\n  data: { labels: weeks, datasets: [{ label: 'MRR', data: mrr }] },\n  options: { plugins: { chartpng: { preset: 'kpi', previous: mrr.at(-2), prefix: '$' } } },\n};\nconst comparison = {\n  type: 'bar',\n  data: {\n    labels: days,\n    datasets: [\n      { label: 'This week', data: thisWeek },\n      { label: 'Last week', data: lastWeek },\n    ],\n  },\n  options: { plugins: { chartpng: { preset: 'comparison' } } },\n};\n\nconst url = (chart, w, h) => 'https://chartpng.dev/chart?c=' + encodeURIComponent(JSON.stringify(chart)) + '&w=' + w + '&h=' + h + '&dpr=2';\nconst kpiUrl = url(kpi, 800, 400);\nconst comparisonUrl = url(comparison, 800, 450);\n\n// Slack refuses an image block whose URL is longer than 3000 characters.\nfor (const imageUrl of [kpiUrl, comparisonUrl]) {\n  if (imageUrl.length > 3000) throw new Error('A chart URL is longer than 3000 characters. Send fewer points.');\n}\n\nconst blocks = [\n  { type: 'header', text: { type: 'plain_text', text: 'Weekly report' } },\n  { type: 'image', image_url: kpiUrl, alt_text: 'MRR with its change and the last eight weeks' },\n  { type: 'image', image_url: comparisonUrl, alt_text: 'This week against last week, by day' },\n];\nreturn [{ json: { kpiUrl, comparisonUrl, blocks } }];"
+      },
+      "id": "kpi-build",
+      "name": "Build chart URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_CHANNEL_ID",
+          "mode": "id"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ JSON.stringify({ blocks: $json.blocks }) }}",
+        "otherOptions": {}
+      },
+      "id": "kpi-slack",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        240
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Monday": {
+      "main": [
+        [
+          {
+            "node": "Sample data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample data": {
+      "main": [
+        [
+          {
+            "node": "Build chart URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build chart URLs": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

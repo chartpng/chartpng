@@ -1,0 +1,212 @@
+{
+  "name": "ChartPNG: Google Sheets rows to a chart URL",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "**ChartPNG: Google Sheets rows to a chart URL**\n\nSheet setup: a tab called Data with the headers label and value, and a tab called Chart with the headers id and chart_url.\n\n1. Pick your Google Sheets credential in both Sheets nodes and your spreadsheet.\n2. Run the workflow. The Chart tab gets one row, id \"latest\", with the image URL.\n3. To run it on a schedule, swap the manual trigger for a Schedule Trigger.\n\nThe HTTP Request node opens the URL once, so a bad config stops the run before it writes a broken link.\n\nDocs: https://chartpng.dev/guides/n8n",
+        "height": 400,
+        "width": 440
+      },
+      "id": "note-setup",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -160
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "sheets-trigger",
+      "name": "Run manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Data",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "sheets-read",
+      "name": "Read rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// One chart from every row: the \"label\" column names a bar, \"value\" sets its height.\nconst rows = $input.all().map((item) => item.json);\nconst labels = rows.map((row) => String(row.label));\nconst values = rows.map((row) => Number(row.value));\nif (!rows.length || values.some((value) => Number.isNaN(value))) {\n  throw new Error('The Data tab needs a label column and a numeric value column.');\n}\nconst chart = {\n  type: 'bar',\n  data: { labels, datasets: [{ label: 'Value', data: values }] },\n};\nconst imageUrl = 'https://chartpng.dev/chart?w=800&h=450&c=' + encodeURIComponent(JSON.stringify(chart));\nreturn [{ json: { id: 'latest', chart_url: imageUrl } }];"
+      },
+      "id": "sheets-build",
+      "name": "Build chart URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.chart_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "sheets-check",
+      "name": "Check the render",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Chart",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('Build chart URL').first().json.id }}",
+            "chart_url": "={{ $('Build chart URL').first().json.chart_url }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chart_url",
+              "displayName": "chart_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sheets-write",
+      "name": "Write URL back",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        960,
+        300
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run manually": {
+      "main": [
+        [
+          {
+            "node": "Read rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read rows": {
+      "main": [
+        [
+          {
+            "node": "Build chart URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build chart URL": {
+      "main": [
+        [
+          {
+            "node": "Check the render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check the render": {
+      "main": [
+        [
+          {
+            "node": "Write URL back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

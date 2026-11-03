@@ -1,0 +1,19 @@
+{
+  "name": "@chartpng/client",
+  "version": "0.1.0",
+  "description": "Chart.js configs as PNG images, by URL. For emails, PDFs, Slack and AI agents.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": ["index.js", "index.d.ts", "README.md", "LICENSE"],
+  "engines": { "node": ">=22" },
+  "keywords": ["chart", "chart.js", "png", "image", "email", "api", "chart-image"],
+  "homepage": "https://chartpng.dev",
+  "bugs": { "email": "hola@chartpng.dev" },
+  "author": "ChartPNG <hola@chartpng.dev> (https://chartpng.dev)",
+  "license": "MIT"
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "dev.chartpng/chartpng",
+  "title": "ChartPNG",
+  "description": "Draw Chart.js charts as PNG images: a shareable image URL or the PNG itself.",
+  "websiteUrl": "https://chartpng.dev/docs",
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@chartpng/mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CHARTPNG_API_KEY",
+          "description": "Optional Pro key. Without it the images carry a small watermark.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "CHARTPNG_BASE_URL",
+          "description": "API base URL. Default https://chartpng.dev",
+          "isRequired": false,
+          "default": "https://chartpng.dev"
+        }
+      ]
+    }
+  ]
+}

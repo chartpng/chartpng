@@ -1,0 +1,152 @@
+{
+  "name": "ChartPNG: weekly chart to Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "**ChartPNG: weekly chart to Slack**\n\n1. Open \"Build chart\" and replace the sample numbers with your data.\n2. In \"Upload to Slack\", pick your Slack credential and set the channel.\n3. Run the workflow once, then publish it (Active on n8n 1.x).\n\n**Optional Pro key.** Without a key the chart has a small watermark. To remove it, open the HTTP Request node, set Authentication to Generic Credential Type, set Generic Auth Type to Header Auth, then create a credential with Name Authorization and Value Bearer plus your key. Keep the key in the credential, not in a header field: exported workflows keep credentials out but keep any value typed into a header field. Never put the key in a GET URL.\n\nDocs: https://chartpng.dev/guides/n8n",
+        "height": 340,
+        "width": 420
+      },
+      "id": "note-setup",
+      "name": "Setup notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Every Monday",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Sample data: replace it with your own (a database, an API, another node).\nconst days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];\nconst signups = [12, 19, 7, 15, 22, 9, 14];\nconst chart = {\n  type: 'bar',\n  data: { labels: days, datasets: [{ label: 'Signups', data: signups }] },\n  options: { plugins: { title: { display: true, text: 'Signups last week' } } },\n};\nreturn [{ json: { chart } }];"
+      },
+      "id": "weekly-build",
+      "name": "Build chart",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chartpng.dev/chart",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ c: $json.chart, w: 800, h: 450, dpr: 2, bkg: 'white' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "weekly-render",
+      "name": "Render chart (ChartPNG)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "options": {
+          "channelId": "REPLACE_WITH_CHANNEL_ID",
+          "fileName": "weekly-signups.png",
+          "initialComment": "Signups last week"
+        }
+      },
+      "id": "weekly-slack",
+      "name": "Upload to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        240
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Monday": {
+      "main": [
+        [
+          {
+            "node": "Build chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build chart": {
+      "main": [
+        [
+          {
+            "node": "Render chart (ChartPNG)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render chart (ChartPNG)": {
+      "main": [
+        [
+          {
+            "node": "Upload to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

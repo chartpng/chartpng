@@ -1,0 +1,330 @@
+{
+  "name": "ChartPNG: weekly Stripe revenue to Slack",
+  "nodes": [
+    {
+      "id": "stripe-note",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        -60
+      ],
+      "parameters": {
+        "content": "### How it works\nEvery Monday at 09:00 this workflow reads the last 12 whole weeks of paid invoices from Stripe, adds them up by week and posts a KPI card to Slack: last week's revenue, the change on the week before and a 12-week sparkline. The chart is a PNG that ChartPNG (chartpng.dev) draws from a Chart.js config in the image URL, so Slack shows it like any image and nothing is uploaded.\n\nThe figure is an approximation, not MRR: the sum of paid invoices by the week they were created (UTC), tax included, with no proration, refunds or churn. With several currencies the chart uses the one with the most revenue, and the note under it counts the invoices left out. The workflow only reads from Stripe.\n\n### Setup\n1. Create a Stripe API credential and select it in **List paid invoices**. Stripe recommends a restricted key that can only read; n8n documents the secret key, so keep that as the fallback.\n2. Create a Slack credential and select it in **Post to Slack**. With a bot token, invite the app to the channel.\n3. In **Settings**, set `slackChannelId` to the channel ID (channel details in Slack, at the bottom).\n4. Run the workflow once, check the message in Slack, then activate it.\n\n### Customization\nChange `weeks` and `chartTitle` in **Settings**. Without a ChartPNG key the image carries a small chartpng.dev watermark; a signed URL removes it: https://chartpng.dev/docs#signed-urls. Guide: https://chartpng.dev/guides/stripe-mrr-to-slack",
+        "width": 440,
+        "height": 720
+      }
+    },
+    {
+      "id": "stripe-section-window",
+      "name": "Section: window",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        140
+      ],
+      "parameters": {
+        "content": "## When and how far back\nRuns every Monday at 09:00 in the workflow timezone. **Settings** holds what you change; **Date range** turns `weeks` into whole weeks, Monday to Sunday, in UTC.",
+        "width": 680,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "stripe-section-stripe",
+      "name": "Section: Stripe",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        680,
+        140
+      ],
+      "parameters": {
+        "content": "## Read Stripe\nOne GET of paid invoices in the window, 100 per page, up to 20 pages. Read-only.",
+        "width": 220,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "stripe-section-chart",
+      "name": "Section: chart",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        940,
+        140
+      ],
+      "parameters": {
+        "content": "## Build the chart\nSums each week in one currency and builds the ChartPNG image URL and the Slack blocks, with alt text. Stops with a clear error when there is nothing to chart.",
+        "width": 220,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "stripe-section-slack",
+      "name": "Section: Slack",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        140
+      ],
+      "parameters": {
+        "content": "## Post to Slack\nA header, the chart as an image block and a note on what the figure includes.",
+        "width": 220,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "stripe-trigger",
+      "name": "Every Monday",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        320
+      ]
+    },
+    {
+      "id": "stripe-settings",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        320
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "settings-weeks",
+              "name": "weeks",
+              "type": "number",
+              "value": 12
+            },
+            {
+              "id": "settings-title",
+              "name": "chartTitle",
+              "type": "string",
+              "value": "Weekly revenue"
+            },
+            {
+              "id": "settings-channel",
+              "name": "slackChannelId",
+              "type": "string",
+              "value": "REPLACE_WITH_CHANNEL_ID"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// The last whole weeks (weeks in Settings), Monday to Sunday, ending at the start of this Monday. Stripe takes Unix seconds.\n// Which Monday it is comes from n8n's $now (Luxon) in the workflow's timezone (Workflow settings), so the\n// Monday 09:00 run in Sydney or Auckland, which is still Sunday in UTC, picks the Monday that just started.\n// The weeks themselves are cut at 00:00 UTC on those dates. East of UTC that is a few hours after the run,\n// so the last hours of the final UTC Sunday are not in the chart.\nconst WEEKS = $('Settings').first().json.weeks;\nif (!Number.isInteger(WEEKS) || WEEKS < 2 || WEEKS > 52) throw new Error('Set weeks in Settings to a whole number from 2 to 52.');\nconst WEEK = 7 * 86400;\nconst d = $now.startOf('day');\nconst m = d.minus({ days: d.weekday - 1 });\nconst monday = Date.UTC(m.year, m.month - 1, m.day) / 1000;\nreturn [{ json: { from: monday - WEEKS * WEEK, to: monday, weeks: WEEKS } }];"
+      },
+      "id": "stripe-range",
+      "name": "Date range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.stripe.com/v1/invoices",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "paid"
+            },
+            {
+              "name": "created[gte]",
+              "value": "={{ $json.from }}"
+            },
+            {
+              "name": "created[lt]",
+              "value": "={{ $json.to }}"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "paginationMode": "updateAParameterInEachRequest",
+              "parameters": {
+                "parameters": [
+                  {
+                    "type": "qs",
+                    "name": "starting_after",
+                    "value": "={{ $response.body.data.at(-1).id }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.has_more }}",
+              "limitPagesFetched": true,
+              "maxRequests": 20
+            }
+          }
+        }
+      },
+      "id": "stripe-invoices",
+      "name": "List paid invoices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        320
+      ],
+      "credentials": {
+        "stripeApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Stripe account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Approximation: the sum of amount_paid of paid invoices, by the week the invoice was created.\n// No proration, refunds or churn, and tax is included. It is not MRR.\nconst { from, weeks } = $('Date range').first().json;\nconst { chartTitle } = $('Settings').first().json;\nconst WEEK = 7 * 86400;\nconst pages = $input.all().map((item) => item.json);\nif (pages.some((page) => !Array.isArray(page.data))) throw new Error('Stripe did not return a list of invoices. Check the Stripe credential.');\nif (pages.at(-1)?.has_more) throw new Error('More than 2000 paid invoices in ' + weeks + ' weeks: the figure would be wrong. Lower weeks in Settings.');\nconst invoices = pages.flatMap((page) => page.data).filter((inv) => inv.status === 'paid' && inv.created >= from && inv.created < from + weeks * WEEK);\nif (invoices.length === 0) throw new Error('No paid invoices in the last ' + weeks + ' weeks, so there is nothing to chart.');\n\n// One currency per chart: the one with the most money. Invoices in others are counted and left out.\nconst byCurrency = {};\nfor (const inv of invoices) {\n  const rows = (byCurrency[inv.currency] ??= new Array(weeks).fill(0));\n  rows[Math.floor((inv.created - from) / WEEK)] += inv.amount_paid;\n}\nconst sum = (rows) => rows.reduce((a, b) => a + b, 0);\nconst currency = Object.keys(byCurrency).sort((a, b) => sum(byCurrency[b]) - sum(byCurrency[a]))[0];\nconst skipped = invoices.filter((inv) => inv.currency !== currency).length;\n\n// Stripe amounts are in the currency's minor unit. ISK and UGX are zero-decimal but Stripe\n// still sends them with two decimals.\nconst digits = ['isk', 'ugx'].includes(currency) ? 2 : new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits;\nconst values = byCurrency[currency].map((minor) => Math.round(minor / 10 ** digits));\nconst symbol = new Intl.NumberFormat('en', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find((p) => p.type === 'currency').value;\nconst prefix = symbol.length > 1 ? symbol + ' ' : symbol;\n\nconst MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];\nconst labels = values.map((_, i) => {\n  const d = new Date((from + i * WEEK) * 1000);\n  return MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate();\n});\n\nconst last = values.at(-1);\nconst previous = values.at(-2);\nconst money = (n) => prefix + n.toLocaleString('en');\nconst change = previous > 0 ? Math.round(((last - previous) / previous) * 1000) / 10 : null;\nconst trend = change === null ? 'there was no revenue the week before' : change === 0 ? 'unchanged on the week before' : (change > 0 ? 'up ' : 'down ') + Math.abs(change) + '% on the week before';\nconst fallback = chartTitle + ': ' + money(last) + (change === null ? '' : ' (' + (change > 0 ? '+' : '') + change + '%)');\nconst alt = chartTitle + ' was ' + money(last) + ' in the week of ' + labels.at(-1) + ', ' + trend + '. Last ' + weeks + ' weeks of paid Stripe invoices.';\n\nconst chart = {\n  type: 'line',\n  data: { labels, datasets: [{ label: 'Revenue', data: values }] },\n  options: { plugins: { title: { display: true, text: chartTitle }, subtitle: { display: true, text: 'Paid invoices, last ' + weeks + ' weeks' }, chartpng: { preset: 'kpi', previous, prefix, source: 'Stripe, paid invoices' } } },\n};\nconst imageUrl = 'https://chartpng.dev/chart?c=' + encodeURIComponent(JSON.stringify(chart)) + '&w=800&h=400&dpr=2';\n// Slack refuses an image block whose URL is longer than 3000 characters.\nif (imageUrl.length > 3000) throw new Error('The chart URL is longer than 3000 characters.');\n\nconst note = 'Approximate: the sum of paid Stripe invoices by week (UTC, Monday to Sunday), tax included. No proration, refunds or churn.' + (skipped ? ' ' + skipped + ' invoice(s) in other currencies left out.' : '');\nconst blocks = [\n  { type: 'header', text: { type: 'plain_text', text: chartTitle } },\n  { type: 'image', image_url: imageUrl, alt_text: alt },\n  { type: 'context', elements: [{ type: 'mrkdwn', text: note }] },\n];\nreturn [{ json: { imageUrl, fallback, alt, blocks } }];"
+      },
+      "id": "stripe-build",
+      "name": "Build chart URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $('Settings').first().json.slackChannelId }}",
+          "mode": "id"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ JSON.stringify({ blocks: $json.blocks }) }}",
+        "text": "={{ $json.fallback }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "stripe-slack",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1240,
+        320
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Monday": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Date range",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Date range": {
+      "main": [
+        [
+          {
+            "node": "List paid invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List paid invoices": {
+      "main": [
+        [
+          {
+            "node": "Build chart URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build chart URL": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}
