@@ -24,6 +24,11 @@
     "ai-agent"
   ],
   "homepage": "https://chartpng.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chartpng/chartpng.git",
+    "directory": "packages/chartpng-mcp"
+  },
   "bugs": {
     "email": "hola@chartpng.dev"
   },

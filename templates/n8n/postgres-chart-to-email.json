@@ -2,19 +2,83 @@
   "name": "ChartPNG: Postgres query to a chart in an email",
   "nodes": [
     {
+      "id": "pg-note",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        -60
+      ],
       "parameters": {
-        "content": "**ChartPNG: Postgres query to a chart in an email**\n\n1. \"Example query (replace)\" is an example over a made-up `orders` table (SELECT only). Replace it with your own read-only query that returns the columns week, orders and revenue, or change \"Build chart\" to match yours.\n2. Pick your Postgres credential, preferably a database user that can only SELECT.\n3. In \"Send email\", pick your SMTP credential and set From and To.\n4. Run the workflow once, then publish it (Active on n8n 1.x).\n\nThe email links the chart as an image URL and repeats the numbers in a table, because some mail clients block remote images until the reader allows them. This URL is unsigned, so the image keeps the small watermark. A signed URL (see Docs, Signed URLs) removes it: https://chartpng.dev/docs#signed-urls\n\nDocs: https://chartpng.dev/guides/postgres-chart-to-email",
-        "height": 420,
-        "width": 460
-      },
-      "id": "note-setup",
-      "name": "Setup notes",
+        "content": "### How it works\nEvery Monday at 08:00 this workflow runs one read-only SQL query on your Postgres database and emails the result as a chart. The query returns one row per week with `week`, `orders` and `revenue`; the workflow builds a bar chart of revenue, and ChartPNG (chartpng.dev) draws it as a PNG from a Chart.js config in the image URL. The email links that image and repeats every number in a table, because some mail clients block remote images until the reader allows them.\n\nAn empty result, or a row without a number in `orders` or `revenue`, stops the run with a message that names the row, so nobody gets a chart that shows a gap as 0. Text from the database is escaped before it goes into the email.\n\n### Setup\n1. Replace the query in **Example query (replace)** with your own SELECT that returns `week`, `orders` and `revenue`, oldest week first.\n2. Select a Postgres credential, ideally for a database user that can only SELECT.\n3. Select an SMTP credential in **Send email**.\n4. In **Settings**, set `fromEmail`, `toEmail`, `subject` and `chartTitle`.\n5. Run the workflow once, check the email, then activate it.\n\n### Customization\nChange the chart in **Build chart**, for example to plot orders. Without a ChartPNG key the image carries a small watermark; a signed URL removes it: https://chartpng.dev/docs#signed-urls. Guide: https://chartpng.dev/guides/postgres-chart-to-email",
+        "width": 440,
+        "height": 820
+      }
+    },
+    {
+      "id": "pg-section-when",
+      "name": "Section: schedule",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -40,
-        -180
-      ]
+        140
+      ],
+      "parameters": {
+        "content": "## When and to whom\nRuns every Monday at 08:00 in the workflow timezone. **Settings** holds the sender, the recipients, the subject and the chart title.",
+        "width": 460,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "pg-warning-query",
+      "name": "Warning: query",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        460,
+        100
+      ],
+      "parameters": {
+        "content": "## Replace this query\nIt reads a made-up `orders` table. Use your own SELECT that returns `week`, `orders` and `revenue`.",
+        "width": 240,
+        "height": 400,
+        "color": 3
+      }
+    },
+    {
+      "id": "pg-section-chart",
+      "name": "Section: chart",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        740,
+        140
+      ],
+      "parameters": {
+        "content": "## Build the chart and the email\nRevenue by week as a ChartPNG image URL, alt text, a summary line and the same numbers as an HTML table.",
+        "width": 240,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "pg-section-send",
+      "name": "Section: send",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        140
+      ],
+      "parameters": {
+        "content": "## Send the email\nThe chart as an image with the table under it.",
+        "width": 240,
+        "height": 340,
+        "color": 7
+      }
     },
     {
       "parameters": {
@@ -37,8 +101,50 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        240
+        320
       ]
+    },
+    {
+      "id": "pg-settings",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        320
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p-from",
+              "name": "fromEmail",
+              "type": "string",
+              "value": "reports@example.com"
+            },
+            {
+              "id": "p-to",
+              "name": "toEmail",
+              "type": "string",
+              "value": "team@example.com"
+            },
+            {
+              "id": "p-subject",
+              "name": "subject",
+              "type": "string",
+              "value": "Weekly orders and revenue"
+            },
+            {
+              "id": "p-title",
+              "name": "chartTitle",
+              "type": "string",
+              "value": "Revenue by week"
+            }
+          ]
+        },
+        "options": {}
+      }
     },
     {
       "parameters": {
@@ -51,8 +157,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        240,
-        240
+        540,
+        320
       ],
       "credentials": {
         "postgres": {
@@ -65,22 +171,22 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// Rows come from the Postgres node, one item per week, oldest first.\nconst rows = $input.all().map((item) => item.json);\nif (rows.length === 0) throw new Error('The query returned no rows, so there is nothing to chart.');\n\nconst weeks = rows.map((r) => String(r.week));\n// Number(null) and Number('') are 0, so a missing figure has to be caught before Number().\nconst bad = (v) => v == null || String(v).trim() === '' || !Number.isFinite(Number(v));\nconst badRow = rows.findIndex((r) => bad(r.orders) || bad(r.revenue));\nif (badRow !== -1) {\n  throw new Error('Row ' + (badRow + 1) + ' (week ' + weeks[badRow] + ') has no number in orders or revenue. Every row needs numeric orders and revenue columns.');\n}\nconst orders = rows.map((r) => Number(r.orders));\nconst revenue = rows.map((r) => Number(r.revenue));\n\nconst esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nconst money = (n) => String(Math.round(n)).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');\n\nconst chart = {\n  type: 'bar',\n  data: { labels: weeks, datasets: [{ label: 'Revenue', data: revenue }] },\n  options: { plugins: { title: { display: true, text: 'Revenue by week' }, chartpng: { source: 'Source: orders table' } } },\n};\nconst imageUrl = 'https://chartpng.dev/chart?w=800&h=450&dpr=2&c=' + encodeURIComponent(JSON.stringify(chart));\n\nconst last = revenue.length - 1;\nlet summary = 'Week of ' + weeks[last] + ': ' + money(revenue[last]) + ' revenue from ' + orders[last] + ' orders.';\nif (last > 0 && revenue[last - 1] > 0) {\n  const pct = ((revenue[last] - revenue[last - 1]) / revenue[last - 1]) * 100;\n  summary += ' ' + (pct >= 0 ? 'Up ' : 'Down ') + Math.abs(pct).toFixed(1) + '% on the week before.';\n}\nconst alt = 'Bar chart of revenue by week, ' + rows.length + ' weeks. ' + summary;\n\n// The same numbers as text, for mail clients that block remote images.\nconst cell = 'padding:4px 12px;border-bottom:1px solid #dddddd;';\nconst tableHtml = rows\n  .map((r, i) => '<tr><td style=\"' + cell + '\">' + esc(weeks[i]) + '</td><td style=\"' + cell + 'text-align:right\">' + orders[i] + '</td><td style=\"' + cell + 'text-align:right\">' + money(revenue[i]) + '</td></tr>')\n  .join('');\n\nreturn [{ json: { chart, imageUrl, alt: esc(alt), summary: esc(summary), tableHtml } }];"
+        "jsCode": "// Rows come from the Postgres node, one item per week, oldest first.\nconst rows = $input.all().map((item) => item.json);\nif (rows.length === 0) throw new Error('The query returned no rows, so there is nothing to chart.');\n\nconst weeks = rows.map((r) => String(r.week));\n// Number(null) and Number('') are 0, so a missing figure has to be caught before Number().\nconst bad = (v) => v == null || String(v).trim() === '' || !Number.isFinite(Number(v));\nconst badRow = rows.findIndex((r) => bad(r.orders) || bad(r.revenue));\nif (badRow !== -1) {\n  throw new Error('Row ' + (badRow + 1) + ' (week ' + weeks[badRow] + ') has no number in orders or revenue. Every row needs numeric orders and revenue columns.');\n}\nconst orders = rows.map((r) => Number(r.orders));\nconst revenue = rows.map((r) => Number(r.revenue));\n\nconst esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\nconst money = (n) => String(Math.round(n)).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');\n\nconst chart = {\n  type: 'bar',\n  data: { labels: weeks, datasets: [{ label: 'Revenue', data: revenue }] },\n  options: { plugins: { title: { display: true, text: $('Settings').first().json.chartTitle }, chartpng: { source: 'Source: orders table' } } },\n};\nconst imageUrl = 'https://chartpng.dev/chart?w=800&h=450&dpr=2&c=' + encodeURIComponent(JSON.stringify(chart));\n\nconst last = revenue.length - 1;\nlet summary = 'Week of ' + weeks[last] + ': ' + money(revenue[last]) + ' revenue from ' + orders[last] + ' orders.';\nif (last > 0 && revenue[last - 1] > 0) {\n  const pct = ((revenue[last] - revenue[last - 1]) / revenue[last - 1]) * 100;\n  summary += ' ' + (pct >= 0 ? 'Up ' : 'Down ') + Math.abs(pct).toFixed(1) + '% on the week before.';\n}\nconst alt = 'Bar chart of revenue by week, ' + rows.length + ' weeks. ' + summary;\n\n// The same numbers as text, for mail clients that block remote images.\nconst cell = 'padding:4px 12px;border-bottom:1px solid #dddddd;';\nconst tableHtml = rows\n  .map((r, i) => '<tr><td style=\"' + cell + '\">' + esc(weeks[i]) + '</td><td style=\"' + cell + 'text-align:right\">' + orders[i] + '</td><td style=\"' + cell + 'text-align:right\">' + money(revenue[i]) + '</td></tr>')\n  .join('');\n\nreturn [{ json: { chart, imageUrl, alt: esc(alt), summary: esc(summary), tableHtml } }];"
       },
       "id": "pg-build",
       "name": "Build chart",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        480,
-        240
+        820,
+        320
       ]
     },
     {
       "parameters": {
-        "fromEmail": "reports@example.com",
-        "toEmail": "team@example.com",
-        "subject": "Weekly orders and revenue",
+        "fromEmail": "={{ $('Settings').first().json.fromEmail }}",
+        "toEmail": "={{ $('Settings').first().json.toEmail }}",
+        "subject": "={{ $('Settings').first().json.subject }}",
         "emailFormat": "html",
         "html": "=<p>Revenue by week, the last 8 full weeks.</p>\n<img src=\"{{ $json.imageUrl }}\" alt=\"{{ $json.alt }}\" width=\"600\" style=\"max-width:100%;height:auto\">\n<p>{{ $json.summary }}</p>\n<table style=\"border-collapse:collapse;font-size:14px\">\n<tr><th style=\"padding:4px 12px;text-align:left\">Week</th><th style=\"padding:4px 12px;text-align:right\">Orders</th><th style=\"padding:4px 12px;text-align:right\">Revenue</th></tr>\n{{ $json.tableHtml }}\n</table>",
         "options": {}
@@ -90,8 +196,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        720,
-        240
+        1100,
+        320
       ],
       "credentials": {
         "smtp": {
@@ -103,6 +209,17 @@
   ],
   "connections": {
     "Every Monday at 8": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
       "main": [
         [
           {

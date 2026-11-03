@@ -4,6 +4,11 @@
   "title": "ChartPNG",
   "description": "Draw Chart.js charts as PNG images: a shareable image URL or the PNG itself.",
   "websiteUrl": "https://chartpng.dev/docs",
+  "repository": {
+    "url": "https://github.com/chartpng/chartpng",
+    "source": "github",
+    "subfolder": "packages/chartpng-mcp"
+  },
   "version": "0.2.0",
   "packages": [
     {
