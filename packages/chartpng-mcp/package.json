@@ -1,6 +1,6 @@
 {
   "name": "@chartpng/mcp",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "mcpName": "dev.chartpng/chartpng",
   "description": "MCP server that lets AI agents draw Chart.js charts as PNG images (ChartPNG).",
   "type": "module",

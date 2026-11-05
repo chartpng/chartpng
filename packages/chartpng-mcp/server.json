@@ -9,13 +9,13 @@
     "source": "github",
     "subfolder": "packages/chartpng-mcp"
   },
-  "version": "0.2.0",
+  "version": "0.2.2",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@chartpng/mcp",
-      "version": "0.2.0",
+      "version": "0.2.2",
       "transport": {
         "type": "stdio"
       },
